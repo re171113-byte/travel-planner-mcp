@@ -62,16 +62,14 @@ export class BizinfoApi {
   }): Promise<BizinfoItem[]> {
     this.checkApiKey();
 
+    // 카테고리 없이 전체 검색 (카테고리 필터가 너무 제한적임)
     const params = new URLSearchParams({
       crtfcKey: this.apiKey,
       dataType: "json",
-      searchCnt: String(options?.count || 50),
+      searchCnt: String(options?.count || 100),
     });
 
-    if (options?.category) {
-      params.append("searchLclasId", BIZINFO_CATEGORIES[options.category]);
-    }
-
+    // hashtags로 검색 키워드 추가
     if (options?.hashtags) {
       params.append("hashtags", options.hashtags);
     }
@@ -94,7 +92,30 @@ export class BizinfoApi {
       throw new Error(`기업마당 API 오류: ${data.reqErr}`);
     }
 
-    return data.jsonArray || [];
+    let results = data.jsonArray || [];
+
+    // 클라이언트 측에서 카테고리 필터링 (창업 관련 키워드로)
+    if (options?.category) {
+      const categoryKeywords: Record<string, string[]> = {
+        창업: ["창업", "스타트업", "예비창업", "초기창업", "신규사업", "소상공인"],
+        금융: ["융자", "대출", "보증", "투자", "펀드"],
+        기술: ["기술", "R&D", "연구개발", "특허", "혁신"],
+        인력: ["인력", "채용", "고용", "인턴", "일자리"],
+        수출: ["수출", "해외", "글로벌", "무역"],
+        내수: ["내수", "국내", "판로", "마케팅"],
+        경영: ["경영", "컨설팅", "멘토링", "교육"],
+      };
+
+      const keywords = categoryKeywords[options.category] || [];
+      if (keywords.length > 0) {
+        results = results.filter(item => {
+          const text = `${item.pblancNm} ${item.bsnsSumryCn} ${item.hashtags} ${item.pldirSportRealmLclasCodeNm}`;
+          return keywords.some(kw => text.includes(kw));
+        });
+      }
+    }
+
+    return results;
   }
 
   // 창업 관련 지원사업 검색
@@ -103,19 +124,17 @@ export class BizinfoApi {
     founderType?: string;
     count?: number;
   }): Promise<BizinfoItem[]> {
-    // 창업 분야로 검색 (hashtags 없이 넓게 검색 후 필터링)
+    // 전체 검색 후 창업 관련 키워드로 필터링
     let results = await this.searchFunds({
-      category: "창업",
-      count: options?.count || 50,
+      count: options?.count || 100,
     });
 
-    // 창업 분야에 결과가 없으면 금융 분야도 검색
-    if (results.length === 0) {
-      results = await this.searchFunds({
-        category: "금융",
-        count: options?.count || 50,
-      });
-    }
+    // 창업 관련 키워드로 필터링
+    const startupKeywords = ["창업", "스타트업", "예비창업", "초기창업", "소상공인", "중소기업", "신규사업", "사업화"];
+    results = results.filter(item => {
+      const text = `${item.pblancNm} ${item.bsnsSumryCn} ${item.hashtags} ${item.trgetNm}`;
+      return startupKeywords.some(kw => text.includes(kw));
+    });
 
     // 클라이언트 측 필터링 (너무 엄격하지 않게)
     let filtered = results;

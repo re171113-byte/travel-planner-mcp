@@ -162,23 +162,37 @@ class KakaoLocalApi {
   async findCompetitors(
     businessType: string,
     location: string,
-    radius: number = 300,
+    radius: number = 1000,
     limit: number = 15
   ): Promise<Competitor[]> {
-    // 먼저 위치 좌표 얻기
-    const coords = await this.getCoordinates(location);
-    if (!coords) {
-      throw new Error(`위치를 찾을 수 없습니다: ${location}`);
+    // 업종 키워드 정규화 (치킨 -> 치킨집 등)
+    const normalizedType = this.normalizeBusinessType(businessType);
+
+    // 방법 1: 위치 + 업종으로 직접 검색 (좌표 없이)
+    let places = await this.searchByKeyword(`${location} ${normalizedType}`, {
+      size: limit,
+    });
+
+    // 방법 2: 결과가 없으면 좌표 기반 검색 시도
+    if (places.length === 0) {
+      const coords = await this.getCoordinates(location);
+      if (coords) {
+        places = await this.searchByKeyword(normalizedType, {
+          x: String(coords.lng),
+          y: String(coords.lat),
+          radius,
+          size: limit,
+          sort: "distance",
+        });
+      }
     }
 
-    // 업종으로 검색
-    const places = await this.searchByKeyword(`${location} ${businessType}`, {
-      x: String(coords.lng),
-      y: String(coords.lat),
-      radius,
-      size: limit,
-      sort: "distance",
-    });
+    // 방법 3: 여전히 없으면 원본 키워드로 재시도
+    if (places.length === 0 && normalizedType !== businessType) {
+      places = await this.searchByKeyword(`${location} ${businessType}`, {
+        size: limit,
+      });
+    }
 
     return places.map((place) => ({
       id: place.id,
@@ -189,6 +203,29 @@ class KakaoLocalApi {
       phone: place.phone || undefined,
       placeUrl: place.place_url,
     }));
+  }
+
+  // 업종 키워드 정규화
+  private normalizeBusinessType(type: string): string {
+    const typeMap: Record<string, string> = {
+      치킨: "치킨집",
+      카페: "카페",
+      커피: "카페",
+      음식점: "맛집",
+      식당: "맛집",
+      미용실: "미용실",
+      헤어샵: "미용실",
+      편의점: "편의점",
+      마트: "마트",
+      약국: "약국",
+      병원: "병원",
+      피자: "피자",
+      햄버거: "버거",
+      중식: "중국집",
+      일식: "일식당",
+      분식: "분식집",
+    };
+    return typeMap[type] || type;
   }
 
   // 상권 내 업종별 업체 수 조회 (실제 전체 개수 반환)
