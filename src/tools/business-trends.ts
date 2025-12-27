@@ -63,8 +63,8 @@ function generateRecommendation(
   return "무인매장, 반려동물 서비스, 건강식 등 성장 업종을 고려해보세요. 일반 커피전문점, 치킨은 포화 상태입니다.";
 }
 
-// 예산별 추천 업종
-function getRecommendationByBudget(budget?: number): string[] {
+// 예산별 추천 업종 (향후 확장용)
+export function getRecommendationByBudget(budget?: number): string[] {
   if (!budget) return [];
 
   if (budget < 50000000) {
@@ -91,7 +91,7 @@ function getRecommendationByBudget(budget?: number): string[] {
 export async function getBusinessTrends(
   region?: string,
   category?: string,
-  period?: "3months" | "6months" | "1year"
+  _period?: "3months" | "6months" | "1year"
 ): Promise<ApiResult<BusinessTrends>> {
   try {
     // 지역별 인사이트 추가

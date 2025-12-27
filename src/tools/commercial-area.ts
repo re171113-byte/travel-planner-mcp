@@ -53,7 +53,7 @@ function analyzeCharacteristics(
 function generateRecommendation(
   businessType: string,
   saturationScore: number,
-  sameCategoryCount: number
+  _sameCategoryCount: number
 ): string {
   if (saturationScore >= 80) {
     return `${businessType} 포화도가 ${saturationScore}%로 매우 높습니다. 차별화 전략이 필수이며, 인근 다른 지역도 검토해보세요.`;
@@ -71,7 +71,7 @@ function generateRecommendation(
 function calculateSaturationScore(
   businessType: string,
   sameCategoryCount: number,
-  totalStores: number
+  _totalStores: number
 ): number {
   // 업종별 적정 개수 기준 (반경 500m 기준)
   const optimalCounts: Record<string, number> = {
