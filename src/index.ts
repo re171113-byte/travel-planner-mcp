@@ -12,6 +12,13 @@ import { findCompetitors } from "./tools/competitors.js";
 import { recommendPolicyFunds } from "./tools/policy-funds.js";
 import { getStartupChecklist } from "./tools/startup-checklist.js";
 import { getBusinessTrends } from "./tools/business-trends.js";
+import {
+  formatCommercialArea,
+  formatCompetitors,
+  formatPolicyFunds,
+  formatChecklist,
+  formatTrends,
+} from "./utils/response-formatter.js";
 import { APP_CONFIG, SERVER_CONFIG } from "./constants.js";
 
 function createServer() {
@@ -32,7 +39,7 @@ function createServer() {
     async ({ location, business_type, radius }) => {
       const result = await analyzeCommercialArea(location, business_type, radius);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: formatCommercialArea(result) }],
         isError: !result.success,
       };
     }
@@ -51,7 +58,7 @@ function createServer() {
     async ({ location, business_type, radius, limit }) => {
       const result = await findCompetitors(location, business_type, radius, limit);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: formatCompetitors(result) }],
         isError: !result.success,
       };
     }
@@ -80,7 +87,7 @@ function createServer() {
         founder_age
       );
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: formatPolicyFunds(result) }],
         isError: !result.success,
       };
     }
@@ -97,7 +104,7 @@ function createServer() {
     async ({ business_type, region }) => {
       const result = await getStartupChecklist(business_type, region);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: formatChecklist(result) }],
         isError: !result.success,
       };
     }
@@ -119,7 +126,7 @@ function createServer() {
     async ({ region, category, period }) => {
       const result = await getBusinessTrends(region, category, period);
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: formatTrends(result) }],
         isError: !result.success,
       };
     }
