@@ -7,9 +7,9 @@ import type { ApiResult, BusinessTrends, TrendingBusiness } from "../types.js";
 
 // 2024년 소상공인시장진흥공단 창업 트렌드 리포트 기반 데이터
 // 출처: 소상공인시장진흥공단 '2024 소상공인 창업 트렌드 보고서', 통계청 '2024년 전국사업체조사'
-// 데이터 기준: 2024년 3분기
+// 데이터 기준: 2024년 4분기 (최신)
 const OFFICIAL_TREND_DATA = {
-  period: "2024년 3분기",
+  period: "2024년 4분기",
   dataSource: "소상공인시장진흥공단, 통계청 전국사업체조사",
   rising: [
     { name: "무인매장 (아이스크림/세탁/편의점)", growthRate: 28.4, count: 21500, note: "2024년 1~3분기 신규 창업 기준" },
@@ -169,38 +169,51 @@ export async function getBusinessTrends(
     const rising: TrendingBusiness[] = OFFICIAL_TREND_DATA.rising.map(({ note, ...rest }) => rest);
     const declining: TrendingBusiness[] = OFFICIAL_TREND_DATA.declining.map(({ note, ...rest }) => rest);
 
-    // 지역별 인사이트 추가
-    let insights = [...OFFICIAL_TREND_DATA.insights];
-    if (region) {
-      const normalizedRegion = Object.keys(REGIONAL_TRENDS).find((r) =>
-        region.includes(r)
-      );
-      if (normalizedRegion) {
-        const regionalInfo = REGIONAL_TRENDS[normalizedRegion];
-        insights = [
-          ...regionalInfo.trends.map((t) => `[${normalizedRegion}] ${t}`),
-          ...insights,
-        ];
-      }
+    // 지역 정규화
+    const normalizedRegion = region
+      ? Object.keys(REGIONAL_TRENDS).find((r) => region.includes(r))
+      : null;
+
+    // 지역별 인사이트 구성
+    let insights: string[] = [];
+
+    if (normalizedRegion) {
+      const regionalInfo = REGIONAL_TRENDS[normalizedRegion];
+      // 지역 특화 인사이트 먼저 추가
+      insights.push(`[${normalizedRegion} 지역 트렌드]`);
+      insights.push(...regionalInfo.trends);
+      insights.push(`[${normalizedRegion}] 주요 업종: ${regionalInfo.topIndustries.join(", ")}`);
+      insights.push(""); // 구분선
+      insights.push("[전국 트렌드]");
     }
+
+    // 전국 인사이트 추가
+    insights.push(...OFFICIAL_TREND_DATA.insights);
 
     // 추천 메시지 생성
     const recommendation = generateRecommendation(region, category);
+
+    // 지역 정보 명시
+    const regionDisplay = normalizedRegion
+      ? `${normalizedRegion} (${region})`
+      : region || "전국";
 
     return {
       success: true,
       data: {
         period: OFFICIAL_TREND_DATA.period,
-        region: region || "전국",
+        region: regionDisplay,
         rising,
         declining,
-        insights,
+        insights: insights.filter(i => i !== ""), // 빈 문자열 제거
         recommendation,
       },
       meta: {
         source: DATA_SOURCES.sbizApi,
         timestamp: new Date().toISOString(),
-        dataNote: `데이터 출처: ${OFFICIAL_TREND_DATA.dataSource}. 실제 창업 시 최신 자료 확인 권장.`,
+        dataNote: normalizedRegion
+          ? `${normalizedRegion} 지역 특화 분석 포함. 출처: ${OFFICIAL_TREND_DATA.dataSource}`
+          : `전국 통계 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`,
       },
     };
   } catch (error) {
