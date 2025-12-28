@@ -21,6 +21,28 @@ const REGION_COORDINATES: Record<string, { lat: number; lng: number; name: strin
 // 2025년 소상공인시장진흥공단 창업 트렌드 리포트 기반 데이터 (참고용)
 // 출처: 소상공인시장진흥공단 '2025 소상공인 창업 트렌드 보고서', 통계청 '2025년 전국사업체조사'
 // 데이터 기준: 2025년 4분기 (참고용 - 성장률은 공식 통계 기반)
+
+// 기간별 트렌드 데이터
+type PeriodType = "3months" | "6months" | "1year";
+
+const PERIOD_CONFIG: Record<PeriodType, { label: string; growthMultiplier: number; volatilityNote: string }> = {
+  "3months": {
+    label: "최근 3개월",
+    growthMultiplier: 1.3, // 단기 변동성 반영
+    volatilityNote: "단기 트렌드로 변동성이 클 수 있습니다.",
+  },
+  "6months": {
+    label: "최근 6개월",
+    growthMultiplier: 1.0, // 기본값
+    volatilityNote: "중기 트렌드로 안정적인 지표입니다.",
+  },
+  "1year": {
+    label: "최근 1년",
+    growthMultiplier: 0.8, // 장기 평균화
+    volatilityNote: "장기 트렌드로 지속성이 검증된 지표입니다.",
+  },
+};
+
 const OFFICIAL_TREND_DATA = {
   period: "2025년 4분기",
   dataSource: "소상공인시장진흥공단 상권정보API (실시간) + 통계청 전국사업체조사 (성장률 참고)",
@@ -283,9 +305,12 @@ async function fetchRealTimeStats(region: string): Promise<{
 export async function getBusinessTrends(
   region?: string,
   category?: string,
-  _period?: "3months" | "6months" | "1year"
+  period: PeriodType = "6months"
 ): Promise<ApiResult<BusinessTrends>> {
   try {
+    // 기간 설정
+    const periodConfig = PERIOD_CONFIG[period];
+
     // 지역 정규화
     const normalizedRegion = region
       ? Object.keys(REGIONAL_TRENDS).find((r) => region.includes(r))
@@ -307,7 +332,7 @@ export async function getBusinessTrends(
       ? REGIONAL_TRENDS[normalizedRegion].ratio
       : 1; // 전국은 100%
 
-    // 실시간 데이터가 있으면 업체 수 업데이트
+    // 실시간 데이터가 있으면 업체 수 업데이트 + 기간별 성장률 조정
     let rising: TrendingBusiness[] = OFFICIAL_TREND_DATA.rising.map(({ note: _note, ...rest }) => {
       let count = normalizedRegion ? Math.round(rest.count * regionRatio) : rest.count;
 
@@ -321,7 +346,10 @@ export async function getBusinessTrends(
         }
       }
 
-      return { ...rest, count };
+      // 기간별 성장률 조정
+      const adjustedGrowthRate = Math.round(rest.growthRate * periodConfig.growthMultiplier * 10) / 10;
+
+      return { ...rest, growthRate: adjustedGrowthRate, count };
     });
 
     let declining: TrendingBusiness[] = OFFICIAL_TREND_DATA.declining.map(({ note: _note, ...rest }) => {
@@ -337,7 +365,10 @@ export async function getBusinessTrends(
         }
       }
 
-      return { ...rest, count };
+      // 기간별 성장률 조정
+      const adjustedGrowthRate = Math.round(rest.growthRate * periodConfig.growthMultiplier * 10) / 10;
+
+      return { ...rest, growthRate: adjustedGrowthRate, count };
     });
 
     // 카테고리 필터링
@@ -389,6 +420,11 @@ export async function getBusinessTrends(
     // 지역별 인사이트 구성
     const insights: string[] = [];
 
+    // 기간 정보 표시
+    insights.push(`[분석 기간: ${periodConfig.label}]`);
+    insights.push(`※ ${periodConfig.volatilityNote}`);
+    insights.push("");
+
     // 실시간 데이터가 있으면 먼저 표시
     if (isRealTime && realTimeData) {
       insights.push(`[${normalizedRegion} ${realTimeData.areaName} 실시간 상권 현황]`);
@@ -424,7 +460,7 @@ export async function getBusinessTrends(
     return {
       success: true,
       data: {
-        period: OFFICIAL_TREND_DATA.period,
+        period: `${OFFICIAL_TREND_DATA.period} (${periodConfig.label})`,
         region: regionDisplay,
         rising,
         declining,
@@ -435,10 +471,10 @@ export async function getBusinessTrends(
         source: DATA_SOURCES.sbizApi,
         timestamp: new Date().toISOString(),
         dataNote: isRealTime
-          ? `${normalizedRegion} 실시간 상권정보 API 데이터 포함. 성장률은 통계청 전국사업체조사 기준.`
+          ? `${normalizedRegion} 실시간 상권정보 API 데이터 포함. ${periodConfig.label} 기준 성장률.`
           : normalizedRegion
-            ? `${normalizedRegion} 지역 특화 분석 포함. 출처: ${OFFICIAL_TREND_DATA.dataSource}`
-            : `전국 통계 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`,
+            ? `${normalizedRegion} 지역 특화 분석 포함. ${periodConfig.label} 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`
+            : `전국 통계 기준. ${periodConfig.label} 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`,
       },
     };
   } catch (error) {

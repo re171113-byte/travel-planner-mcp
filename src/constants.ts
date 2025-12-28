@@ -23,7 +23,6 @@ export const DATA_SOURCES = {
   kakaoLocal: "카카오맵 로컬 API",
   sbizApi: "소상공인시장진흥공단 상권정보 API",
   bizinfoApi: "기업마당 지원사업정보 API",
-  mockData: "Mock Data (개발용)",
 } as const;
 
 // 업종 카테고리 코드 (카카오맵)

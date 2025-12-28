@@ -89,6 +89,7 @@ export interface PolicyFundRecommendation {
     stage: string;
     region: string;
     founderType?: string;
+    founderAge?: string;
   };
   matchedFunds: PolicyFund[];
   totalCount: number;
