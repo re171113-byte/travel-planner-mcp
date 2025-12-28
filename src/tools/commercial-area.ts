@@ -100,14 +100,35 @@ export interface CommercialAreaComparison {
   summary: string;
 }
 
-// 입지 점수 계산 (낮은 포화도가 좋음)
+// 입지 점수 계산 (세분화된 가중치 적용)
 function calculateLocationScore(data: CommercialAreaData): number {
-  const saturationPenalty = data.density.saturationScore;
-  const diversityBonus = Object.keys(data.density.categoryBreakdown).length * 5;
-  const trafficBonus = data.density.totalStores > 30 ? 20 : data.density.totalStores > 15 ? 10 : 0;
+  // 1. 포화도 점수 (0-40점) - 낮을수록 좋음
+  const saturationScore = 40 - (data.density.saturationScore / 100) * 40;
 
-  // 100점 만점에서 포화도를 빼고 보너스 추가
-  return Math.max(0, Math.min(100, 100 - saturationPenalty + diversityBonus + trafficBonus));
+  // 2. 상권 활성도 점수 (0-25점) - 상가 수 기반, 유동인구 추정
+  const totalStores = data.density.totalStores;
+  let activityScore = 0;
+  if (totalStores >= 1000) activityScore = 25;
+  else if (totalStores >= 500) activityScore = 20;
+  else if (totalStores >= 200) activityScore = 15;
+  else if (totalStores >= 100) activityScore = 10;
+  else activityScore = 5;
+
+  // 3. 경쟁 강도 점수 (0-20점) - 동종업종 적을수록 좋음
+  const competitorCount = data.density.sameCategoryCount;
+  let competitionScore = 20;
+  if (competitorCount >= 20) competitionScore = 5;
+  else if (competitorCount >= 15) competitionScore = 10;
+  else if (competitorCount >= 10) competitionScore = 15;
+
+  // 4. 업종 다양성 점수 (0-15점) - 다양할수록 좋음
+  const categoryCount = Object.keys(data.density.categoryBreakdown).length;
+  const diversityScore = Math.min(15, categoryCount * 3);
+
+  // 총점 계산
+  const score = saturationScore + activityScore + competitionScore + diversityScore;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 // 여러 지역 비교 분석
@@ -170,7 +191,7 @@ export async function compareCommercialAreas(
       meta: {
         source: DATA_SOURCES.kakaoLocal,
         timestamp: new Date().toISOString(),
-        dataNote: `${locations.length}개 지역 비교 분석 완료`,
+        dataNote: `${locations.length}개 지역 비교 분석 완료 (반경 ${radius}m 기준). 신뢰도: 높음 (카카오맵 실시간 API). ※ 점수는 포화도, 상권활성도, 경쟁강도, 업종다양성 4개 요소로 산출됩니다.`,
       },
     };
   } catch (error) {
@@ -283,6 +304,7 @@ export async function analyzeCommercialArea(
       meta: {
         source: DATA_SOURCES.kakaoLocal,
         timestamp: new Date().toISOString(),
+        dataNote: `반경 ${radius}m 기준. 신뢰도: 높음 (카카오맵 실시간 API). ${sameCategoryCount > 0 ? `동종 업체 ${sameCategoryCount}개 검색됨.` : ""} ※ 실제 상권 현황은 현장 확인을 권장합니다.`,
       },
     };
   } catch (error) {

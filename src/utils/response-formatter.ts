@@ -12,6 +12,9 @@ import type {
   PopulationAnalysis,
 } from "../types.js";
 import type { CommercialAreaComparison } from "../tools/commercial-area.js";
+import type { NearbyFacilitiesAnalysis } from "../tools/nearby-facilities.js";
+import type { RentEstimateAnalysis } from "../tools/rent-estimate.js";
+import type { RevenueSimulation } from "../tools/revenue-simulation.js";
 
 // 상권 분석 결과 포맷
 export function formatCommercialArea(result: ApiResult<CommercialAreaData>): string {
@@ -482,6 +485,184 @@ export function formatPopulation(result: ApiResult<PopulationAnalysis>): string 
   lines.push(`💡 인사이트`);
   d.insights.forEach((insight) => {
     lines.push(`   • ${insight}`);
+  });
+
+  if (result.meta) {
+    lines.push(``);
+    lines.push(`📅 데이터 출처: ${result.meta.source}`);
+    if (result.meta.dataNote) {
+      lines.push(`📌 ${result.meta.dataNote}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// 주변 편의시설 분석 결과 포맷
+export function formatNearbyFacilities(result: ApiResult<NearbyFacilitiesAnalysis>): string {
+  if (!result.success) {
+    return `❌ 오류: ${result.error?.message}\n💡 ${result.error?.suggestion || ""}`;
+  }
+
+  const d = result.data!;
+  const lines = [
+    `🏢 ${d.location.name} 주변 편의시설 분석`,
+    ``,
+    `📍 분석 조건`,
+    `   • 위치: ${d.location.name}`,
+    `   • 반경: ${d.radius}m`,
+    ``,
+    `📊 편의시설 현황 (총 ${d.summary.totalCount}개)`,
+    `   • 접근성 등급: ${d.summary.accessibility}`,
+    ``,
+    `🏗️ 시설별 상세`,
+  ];
+
+  for (const facility of d.facilities) {
+    if (facility.count > 0) {
+      lines.push(``);
+      lines.push(`▸ ${facility.category} (${facility.count}개)`);
+      facility.items.slice(0, 3).forEach((item) => {
+        lines.push(`   • ${item.name} - ${item.distance}`);
+      });
+    }
+  }
+
+  if (d.summary.highlights.length > 0) {
+    lines.push(``);
+    lines.push(`⭐ 주요 시설 (가장 가까운)`);
+    d.summary.highlights.forEach((highlight) => {
+      lines.push(`   • ${highlight}`);
+    });
+  }
+
+  lines.push(``);
+  lines.push(`💡 입지 인사이트`);
+  d.insights.forEach((insight) => {
+    lines.push(`   ${insight}`);
+  });
+
+  if (result.meta) {
+    lines.push(``);
+    lines.push(`📅 데이터 출처: ${result.meta.source}`);
+    if (result.meta.dataNote) {
+      lines.push(`📌 ${result.meta.dataNote}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// 임대료 시세 분석 결과 포맷
+export function formatRentEstimate(result: ApiResult<RentEstimateAnalysis>): string {
+  if (!result.success) {
+    return `❌ 오류: ${result.error?.message}\n💡 ${result.error?.suggestion || ""}`;
+  }
+
+  const d = result.data!;
+  const lines = [
+    `🏠 ${d.location.name} 임대료 시세 분석`,
+    ``,
+    `📍 조건`,
+    `   • 지역: ${d.location.region}`,
+    `   • 규모: ${d.conditions.size}평`,
+    `   • 층수: ${d.conditions.floor}`,
+    `   • 건물유형: ${d.conditions.buildingType}`,
+    ``,
+    `💰 보증금 추정`,
+    `   • 최소: ${d.estimate.deposit.min.toLocaleString()}만원`,
+    `   • 평균: ${d.estimate.deposit.average.toLocaleString()}만원`,
+    `   • 최대: ${d.estimate.deposit.max.toLocaleString()}만원`,
+    ``,
+    `📅 월 임대료 추정`,
+    `   • 최소: ${d.estimate.monthlyRent.min.toLocaleString()}만원`,
+    `   • 평균: ${d.estimate.monthlyRent.average.toLocaleString()}만원`,
+    `   • 최대: ${d.estimate.monthlyRent.max.toLocaleString()}만원`,
+    ``,
+    `🧾 월 총 비용`,
+    `   • 관리비: 약 ${d.estimate.managementFee.toLocaleString()}만원`,
+    `   • 총액: 약 ${d.estimate.totalMonthlyCost.toLocaleString()}만원/월`,
+    ``,
+    `📊 시세 비교`,
+    `   • ${d.comparison.vsSeoul}`,
+    `   • ${d.comparison.vsRegionAverage}`,
+  ];
+
+  lines.push(``);
+  lines.push(`💡 인사이트`);
+  d.insights.forEach((insight) => {
+    lines.push(`   ${insight}`);
+  });
+
+  lines.push(``);
+  lines.push(`✨ 비용 절감 TIP`);
+  d.tips.forEach((tip) => {
+    lines.push(`   • ${tip}`);
+  });
+
+  if (result.meta) {
+    lines.push(``);
+    lines.push(`📅 데이터 출처: ${result.meta.source}`);
+    if (result.meta.dataNote) {
+      lines.push(`📌 ${result.meta.dataNote}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// 매출 시뮬레이션 결과 포맷
+export function formatRevenueSimulation(result: ApiResult<RevenueSimulation>): string {
+  if (!result.success) {
+    return `❌ 오류: ${result.error?.message}\n💡 ${result.error?.suggestion || ""}`;
+  }
+
+  const d = result.data!;
+  const lines = [
+    `📈 ${d.businessType} 매출 시뮬레이션 (${d.region})`,
+    ``,
+    `📍 운영 조건`,
+    `   • 규모: ${d.conditions.size}평`,
+    `   • 인력: ${d.conditions.staffCount}인`,
+    `   • 운영시간: ${d.conditions.operatingHours}시간/일`,
+    ``,
+    `💰 일 매출 예상`,
+    `   • 최소: ${d.dailyRevenue.min.toLocaleString()}만원`,
+    `   • 평균: ${d.dailyRevenue.average.toLocaleString()}만원`,
+    `   • 최대: ${d.dailyRevenue.max.toLocaleString()}만원`,
+    ``,
+    `📅 월 매출 예상 (26일 영업 기준)`,
+    `   • 최소: ${d.monthlyRevenue.min.toLocaleString()}만원`,
+    `   • 평균: ${d.monthlyRevenue.average.toLocaleString()}만원`,
+    `   • 최대: ${d.monthlyRevenue.max.toLocaleString()}만원`,
+    ``,
+    `📆 연 매출 예상`,
+    `   • 최소: ${d.yearlyRevenue.min.toLocaleString()}만원`,
+    `   • 평균: ${d.yearlyRevenue.average.toLocaleString()}만원`,
+    `   • 최대: ${d.yearlyRevenue.max.toLocaleString()}만원`,
+    ``,
+    `👥 고객 분석`,
+    `   • 일 평균 고객수: ${d.customerAnalysis.dailyCustomers}명`,
+    `   • 평균 객단가: ${d.customerAnalysis.averagePrice.toLocaleString()}원`,
+    `   • 피크 시간대: ${d.customerAnalysis.peakHours}`,
+    `   • 피크 요일: ${d.customerAnalysis.peakDays}`,
+    ``,
+    `🌡️ 계절별 월 매출 변동`,
+    `   • 봄: ${d.seasonalVariation.spring.toLocaleString()}만원`,
+    `   • 여름: ${d.seasonalVariation.summer.toLocaleString()}만원`,
+    `   • 가을: ${d.seasonalVariation.fall.toLocaleString()}만원`,
+    `   • 겨울: ${d.seasonalVariation.winter.toLocaleString()}만원`,
+    ``,
+    `💵 수익 추정`,
+    `   • 월 순이익: 약 ${d.profitEstimate.monthlyProfit.toLocaleString()}만원`,
+    `   • 마진율: ${d.profitEstimate.profitMargin}%`,
+    `   • ${d.profitEstimate.note}`,
+  ];
+
+  lines.push(``);
+  lines.push(`💡 인사이트`);
+  d.insights.forEach((insight) => {
+    lines.push(`   ${insight}`);
   });
 
   if (result.meta) {

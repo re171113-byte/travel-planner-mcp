@@ -12,6 +12,131 @@ function inferFounderTypeFromAge(age: number): "청년" | "중장년" | "일반"
   return "일반";
 }
 
+// 업종별 관련 키워드 (적합/부적합)
+const BUSINESS_TYPE_KEYWORDS: Record<string, { relevant: string[]; irrelevant: string[] }> = {
+  카페: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "소매", "서비스"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  음식점: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "서비스", "식품"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  편의점: {
+    relevant: ["소상공인", "자영업", "프랜차이즈", "창업", "소매", "유통", "서비스"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  미용실: {
+    relevant: ["소상공인", "자영업", "창업", "서비스", "뷰티", "미용"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조", "의료기기"],
+  },
+  치킨: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "배달", "서비스"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  호프: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "서비스", "주류"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  분식: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "서비스"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  베이커리: {
+    relevant: ["요식", "음식", "외식", "소상공인", "자영업", "프랜차이즈", "창업", "서비스", "제과", "제빵"],
+    irrelevant: ["수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  무인매장: {
+    relevant: ["소상공인", "자영업", "창업", "무인", "스마트", "서비스", "소매"],
+    irrelevant: ["수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  스터디카페: {
+    relevant: ["소상공인", "자영업", "창업", "서비스", "교육", "학습"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  네일샵: {
+    relevant: ["소상공인", "자영업", "창업", "서비스", "뷰티", "미용"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "축산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+  반려동물: {
+    relevant: ["소상공인", "자영업", "창업", "서비스", "반려", "펫", "애견", "동물"],
+    irrelevant: ["제조", "수출", "R&D", "연구개발", "특허", "공장", "기계", "장비", "농업", "농촌", "수산", "임업", "광업", "건설", "IT", "소프트웨어", "바이오", "의료기기", "반도체", "자동차", "조선", "철강", "화학", "섬유", "목재", "목구조"],
+  },
+};
+
+// 업종 정규화 (startup-cost-data와 동일한 로직)
+function normalizeBusinessTypeForPolicy(businessType: string): string {
+  const typeMap: Record<string, string> = {
+    커피숍: "카페",
+    커피전문점: "카페",
+    카페: "카페",
+    음식점: "음식점",
+    식당: "음식점",
+    레스토랑: "음식점",
+    편의점: "편의점",
+    마트: "편의점",
+    미용실: "미용실",
+    헤어샵: "미용실",
+    치킨: "치킨",
+    치킨집: "치킨",
+    호프: "호프",
+    술집: "호프",
+    맥주집: "호프",
+    분식: "분식",
+    분식집: "분식",
+    빵집: "베이커리",
+    베이커리: "베이커리",
+    제과점: "베이커리",
+    무인매장: "무인매장",
+    무인점포: "무인매장",
+    스터디카페: "스터디카페",
+    독서실: "스터디카페",
+    네일샵: "네일샵",
+    네일아트: "네일샵",
+    반려동물: "반려동물",
+    펫샵: "반려동물",
+    애견샵: "반려동물",
+  };
+  return typeMap[businessType] || businessType;
+}
+
+// 업종 관련성 점수 계산
+function getBusinessRelevanceScore(
+  fundName: string,
+  fundDescription: string,
+  businessType: string
+): number {
+  const normalizedType = normalizeBusinessTypeForPolicy(businessType);
+  const keywords = BUSINESS_TYPE_KEYWORDS[normalizedType];
+
+  // 알 수 없는 업종은 기본 점수 반환
+  if (!keywords) return 0;
+
+  const text = `${fundName} ${fundDescription}`.toLowerCase();
+  let score = 0;
+
+  // 관련 키워드 포함 시 가점
+  for (const keyword of keywords.relevant) {
+    if (text.includes(keyword.toLowerCase())) {
+      score += 10;
+    }
+  }
+
+  // 비관련 키워드 포함 시 감점
+  for (const keyword of keywords.irrelevant) {
+    if (text.includes(keyword.toLowerCase())) {
+      score -= 30;
+    }
+  }
+
+  // 일반 창업 지원사업은 기본 점수 부여
+  if (text.includes("창업") || text.includes("소상공인")) {
+    score += 5;
+  }
+
+  return score;
+}
+
 // 나이 기반 지원사업 적합도 점수
 function getAgeSuitabilityScore(fundName: string, fundDescription: string, age: number): number {
   const text = `${fundName} ${fundDescription}`.toLowerCase();
@@ -114,6 +239,7 @@ function convertBizinfoToFund(item: {
 function filterAndSortByUserConditions(
   funds: PolicyFund[],
   region: string,
+  businessType: string,
   founderType?: string,
   founderAge?: number
 ): PolicyFund[] {
@@ -133,7 +259,19 @@ function filterAndSortByUserConditions(
     return true;
   });
 
-  // 2단계: 나이 기반 필터링 및 점수 계산
+  // 2단계: 업종 관련성 필터링 및 점수 계산
+  const scoredByBusiness = filtered.map((fund) => {
+    const businessScore = getBusinessRelevanceScore(fund.name, fund.description || "", businessType);
+    return { fund, businessScore };
+  });
+
+  // 업종 부적합 지원사업 제외 (점수가 -50 이하는 명확히 관련없는 분야)
+  filtered = scoredByBusiness
+    .filter((item) => item.businessScore > -50)
+    .sort((a, b) => b.businessScore - a.businessScore)
+    .map((item) => item.fund);
+
+  // 3단계: 나이 기반 필터링 및 점수 계산
   if (founderAge) {
     const scored = filtered.map((fund) => {
       const ageScore = getAgeSuitabilityScore(fund.name, fund.description || "", founderAge);
@@ -258,8 +396,8 @@ export async function recommendPolicyFunds(
     // API 결과를 PolicyFund 형식으로 변환
     let matchedFunds = bizinfoResults.map(convertBizinfoToFund);
 
-    // 사용자 조건으로 추가 필터링 (나이 기반 정렬 포함)
-    matchedFunds = filterAndSortByUserConditions(matchedFunds, region, effectiveFounderType, founderAge);
+    // 사용자 조건으로 추가 필터링 (업종 및 나이 기반 정렬 포함)
+    matchedFunds = filterAndSortByUserConditions(matchedFunds, region, businessType, effectiveFounderType, founderAge);
 
     // 유형 필터링
     if (options?.filterType) {
@@ -315,11 +453,7 @@ export async function recommendPolicyFunds(
       meta: {
         source: DATA_SOURCES.bizinfoApi,
         timestamp: new Date().toISOString(),
-        dataNote: founderAge
-          ? `${founderAge}세 기준으로 적합한 지원사업을 우선 정렬했습니다.`
-          : options?.sortBy
-          ? `${options.sortBy === "deadline" ? "마감일순" : options.sortBy === "amount" ? "금액순" : "매칭점수순"}으로 정렬되었습니다.`
-          : undefined,
+        dataNote: `신뢰도: 높음 (기업마당 실시간 API). ${founderAge ? `${founderAge}세 기준으로 적합한 지원사업을 우선 정렬. ` : ""}${businessType ? `${normalizeBusinessTypeForPolicy(businessType)} 업종 관련 지원사업 우선 정렬. ` : ""}${options?.sortBy ? `${options.sortBy === "deadline" ? "마감일순" : options.sortBy === "amount" ? "금액순" : "매칭점수순"} 정렬. ` : ""}※ 정확한 신청 조건은 해당 기관에서 확인하세요.`,
       },
     };
   } catch (error) {

@@ -126,7 +126,7 @@ export async function calculateStartupCost(
       meta: {
         source: "소상공인진흥공단, 창업진흥원 통계 기반 추정",
         timestamp: new Date().toISOString(),
-        dataNote: `${size}평 기준, ${premiumLabels[premiumLevel]} 인테리어 수준. ${DISCLAIMERS.STARTUP_COST}`,
+        dataNote: `${size}평 기준, ${premiumLabels[premiumLevel]} 인테리어 수준. 신뢰도: 중간 (통계 기반 추정치). ${DISCLAIMERS.STARTUP_COST}`,
       },
     };
   } catch (error) {

@@ -18,6 +18,9 @@ import { getBusinessTrends } from "./tools/business-trends.js";
 import { calculateStartupCost } from "./tools/startup-cost.js";
 import { analyzeBreakeven } from "./tools/breakeven.js";
 import { analyzePopulation } from "./tools/population.js";
+import { analyzeNearbyFacilities } from "./tools/nearby-facilities.js";
+import { estimateRent } from "./tools/rent-estimate.js";
+import { simulateRevenue } from "./tools/revenue-simulation.js";
 import {
   formatCommercialArea,
   formatCompetitors,
@@ -28,6 +31,9 @@ import {
   formatStartupCost,
   formatBreakeven,
   formatPopulation,
+  formatNearbyFacilities,
+  formatRentEstimate,
+  formatRevenueSimulation,
 } from "./utils/response-formatter.js";
 import { APP_CONFIG, SERVER_CONFIG } from "./constants.js";
 
@@ -227,6 +233,63 @@ function createServer() {
       const result = await analyzePopulation(location, business_type, radius);
       return {
         content: [{ type: "text", text: formatPopulation(result) }],
+        isError: !result.success,
+      };
+    }
+  );
+
+  // Tool 10: 주변 편의시설 분석
+  server.tool(
+    "get_nearby_facilities",
+    "상권 주변 편의시설을 분석합니다. 지하철역, 버스정류장, 주차장, 은행, 편의점 등 접근성을 평가합니다.",
+    {
+      location: z.string().describe("분석할 위치 (예: 강남역, 홍대입구, 부산 서면)"),
+      radius: z.number().optional().default(500).describe("분석 반경 (m), 기본값: 500"),
+      categories: z.array(z.string()).optional().describe("조회할 시설 카테고리 (예: ['지하철역', '주차장', '은행']). 미입력 시 전체 조회"),
+    },
+    async ({ location, radius, categories }) => {
+      const result = await analyzeNearbyFacilities(location, radius, categories);
+      return {
+        content: [{ type: "text", text: formatNearbyFacilities(result) }],
+        isError: !result.success,
+      };
+    }
+  );
+
+  // Tool 11: 임대료 시세 조회
+  server.tool(
+    "estimate_rent",
+    "지역별 상가 임대료 시세를 조회합니다. 보증금, 월 임대료, 관리비를 추정하고 비용 절감 팁을 제공합니다.",
+    {
+      location: z.string().describe("조회할 위치 (예: 강남역, 홍대입구, 부산 서면)"),
+      size: z.number().optional().default(15).describe("매장 크기 (평수), 기본값: 15평"),
+      floor: z.enum(["1층", "2층", "지하1층", "3층이상"]).optional().default("1층").describe("매장 층수, 기본값: 1층"),
+      building_type: z.enum(["상가", "오피스텔", "주상복합", "단독건물"]).optional().default("상가").describe("건물 유형, 기본값: 상가"),
+    },
+    async ({ location, size, floor, building_type }) => {
+      const result = await estimateRent(location, size, floor, building_type);
+      return {
+        content: [{ type: "text", text: formatRentEstimate(result) }],
+        isError: !result.success,
+      };
+    }
+  );
+
+  // Tool 12: 매출 시뮬레이션
+  server.tool(
+    "simulate_revenue",
+    "업종별 예상 매출을 시뮬레이션합니다. 일/월/연 매출, 계절별 변동, 예상 순이익을 분석합니다.",
+    {
+      business_type: z.string().describe("창업 업종 (예: 카페, 음식점, 편의점, 미용실)"),
+      region: z.string().describe("창업 지역 (예: 서울 강남, 홍대, 부산)"),
+      size: z.number().optional().default(15).describe("매장 크기 (평수), 기본값: 15평"),
+      staff_count: z.number().optional().default(1).describe("운영 인원 수, 기본값: 1인"),
+      operating_hours: z.number().optional().default(12).describe("일 운영 시간, 기본값: 12시간"),
+    },
+    async ({ business_type, region, size, staff_count, operating_hours }) => {
+      const result = await simulateRevenue(business_type, region, size, staff_count, operating_hours);
+      return {
+        content: [{ type: "text", text: formatRevenueSimulation(result) }],
         isError: !result.success,
       };
     }
