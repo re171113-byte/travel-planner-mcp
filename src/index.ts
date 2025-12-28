@@ -3,9 +3,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import express, { Request, Response } from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { analyzeCommercialArea } from "./tools/commercial-area.js";
 import { findCompetitors } from "./tools/competitors.js";
@@ -153,8 +156,9 @@ async function runHttp() {
     cors({
       origin: true,
       credentials: true,
-      methods: ["GET", "POST", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+      methods: ["GET", "POST", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Requested-With", "mcp-session-id"],
+      exposedHeaders: ["mcp-session-id"],
     })
   );
 
@@ -168,16 +172,19 @@ async function runHttp() {
   });
   app.use(limiter);
 
-  // JSON 파싱 (messages 경로 제외)
+  // JSON 파싱 (messages, mcp 경로 제외 - 별도 처리)
   app.use((req, res, next) => {
-    if (req.path === "/messages") {
+    if (req.path === "/messages" || req.path === "/mcp") {
       return next();
     }
     express.json()(req, res, next);
   });
 
-  // 세션별 transport 저장
-  const transports = new Map<string, SSEServerTransport>();
+  // 세션별 transport 저장 (SSE용)
+  const sseTransports = new Map<string, SSEServerTransport>();
+
+  // Streamable HTTP용 transport 저장
+  const httpTransports: Record<string, StreamableHTTPServerTransport> = {};
 
   // Health check
   app.get("/health", (_req: Request, res: Response) => {
@@ -186,10 +193,73 @@ async function runHttp() {
       name: APP_CONFIG.name,
       version: APP_CONFIG.version,
       description: APP_CONFIG.description,
+      transports: {
+        sse: "/sse",
+        streamableHttp: "/mcp",
+      },
     });
   });
 
-  // SSE endpoint
+  // ===== Streamable HTTP Transport (신규 방식) =====
+  app.post("/mcp", express.json(), async (req: Request, res: Response) => {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    let transport: StreamableHTTPServerTransport;
+
+    if (sessionId && httpTransports[sessionId]) {
+      // 기존 세션 재사용
+      transport = httpTransports[sessionId];
+    } else if (!sessionId && isInitializeRequest(req.body)) {
+      // 새 세션 초기화
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id) => {
+          httpTransports[id] = transport;
+          console.log("Streamable HTTP session initialized:", id);
+        },
+      });
+
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          delete httpTransports[transport.sessionId];
+          console.log("Streamable HTTP session closed:", transport.sessionId);
+        }
+      };
+
+      const server = createServer();
+      await server.connect(transport);
+    } else {
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Bad Request: No valid session ID or not an initialize request" },
+        id: null,
+      });
+      return;
+    }
+
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  app.get("/mcp", async (req: Request, res: Response) => {
+    const sessionId = req.headers["mcp-session-id"] as string;
+    const transport = httpTransports[sessionId];
+    if (transport) {
+      await transport.handleRequest(req, res);
+    } else {
+      res.status(400).json({ error: "Invalid session" });
+    }
+  });
+
+  app.delete("/mcp", async (req: Request, res: Response) => {
+    const sessionId = req.headers["mcp-session-id"] as string;
+    const transport = httpTransports[sessionId];
+    if (transport) {
+      await transport.handleRequest(req, res);
+    } else {
+      res.status(400).json({ error: "Invalid session" });
+    }
+  });
+
+  // ===== SSE Transport (레거시 호환) =====
   app.get("/sse", async (req: Request, res: Response) => {
     console.log("New SSE connection");
 
@@ -199,8 +269,8 @@ async function runHttp() {
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
 
-    if (transports.size >= SERVER_CONFIG.maxSessions) {
-      console.error(`Session limit reached: ${transports.size}`);
+    if (sseTransports.size >= SERVER_CONFIG.maxSessions) {
+      console.error(`Session limit reached: ${sseTransports.size}`);
       res.status(503).json({ error: "서버가 혼잡합니다. 잠시 후 다시 시도해주세요." });
       return;
     }
@@ -208,14 +278,14 @@ async function runHttp() {
     const server = createServer();
     const transport = new SSEServerTransport("/messages", res);
 
-    transports.set(transport.sessionId, transport);
+    sseTransports.set(transport.sessionId, transport);
 
     let cleaned = false;
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
       console.log(`SSE connection closed: ${transport.sessionId}`);
-      transports.delete(transport.sessionId);
+      sseTransports.delete(transport.sessionId);
     };
 
     res.on("close", cleanup);
@@ -227,7 +297,7 @@ async function runHttp() {
     await server.connect(transport);
   });
 
-  // Message endpoint
+  // SSE Message endpoint (레거시)
   app.post("/messages", async (req: Request, res: Response) => {
     const { sessionId } = req.query;
 
@@ -236,7 +306,7 @@ async function runHttp() {
       return;
     }
 
-    const transport = transports.get(sessionId);
+    const transport = sseTransports.get(sessionId);
 
     if (!transport) {
       res.status(404).json({ error: "세션을 찾을 수 없습니다. 다시 연결해주세요." });
@@ -248,7 +318,8 @@ async function runHttp() {
 
   const server = app.listen(PORT, () => {
     console.log(`Startup Helper MCP server running on http://localhost:${PORT}`);
-    console.log(`SSE endpoint: http://localhost:${PORT}/sse`);
+    console.log(`Streamable HTTP endpoint: http://localhost:${PORT}/mcp`);
+    console.log(`SSE endpoint (legacy): http://localhost:${PORT}/sse`);
     console.log(`Health check: http://localhost:${PORT}/health`);
   });
 
