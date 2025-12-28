@@ -39,7 +39,7 @@
 ```
 사용자: "나 29살인데 강남역에서 카페 창업하려고 해. 자본금 5천만원 있어."
 
-AI: [5개 Tool 자동 호출]
+AI: [9개 Tool 자동 호출]
 
 📊 강남역 카페 창업 종합 리포트
 
@@ -68,52 +68,78 @@ AI: [5개 Tool 자동 호출]
 
 ---
 
-## 🛠️ 제공 Tool (5개)
+## 🛠️ 제공 Tool (9개)
 
-### 1. `analyze_commercial_area` - 상권 분석
+### 📊 상권 분석 도구
+
+#### 1. `analyze_commercial_area` - 상권 분석
 특정 위치의 상권을 분석합니다. 업종별 밀집도, 포화도, 상권 특성을 제공합니다.
 
 ```json
 { "location": "강남역", "business_type": "카페", "radius": 500 }
 ```
 
-**결과:** 상권 유형, 포화도 점수, 특성 분석, 진입 추천
+#### 2. `compare_commercial_areas` - 상권 비교 (신규)
+여러 지역의 상권을 비교 분석합니다. 어떤 지역이 창업에 더 적합한지 순위를 제공합니다.
 
-### 2. `find_competitors` - 경쟁업체 검색
-주변 경쟁업체를 검색하고 프랜차이즈 비율, 시장 진입 여지 등을 분석합니다.
+```json
+{ "locations": ["강남역", "홍대입구", "건대입구"], "business_type": "카페" }
+```
+
+#### 3. `analyze_population` - 상권 인구 분석 (신규)
+상권의 유동인구, 연령대, 성별, 시간대별 분포를 분석합니다. 업종 적합도 점수 제공.
+
+```json
+{ "location": "강남역", "business_type": "카페", "radius": 500 }
+```
+
+### 🔍 경쟁 분석 도구
+
+#### 4. `find_competitors` - 경쟁업체 검색
+주변 경쟁업체를 검색하고 분석합니다. SEMAS API 실시간 데이터 연동.
 
 ```json
 { "location": "홍대입구", "business_type": "음식점", "radius": 300 }
 ```
 
-**결과:** 경쟁업체 목록, 프랜차이즈 비율, 평균 거리, 시장 분석
+### 💰 비용/수익성 분석 도구
 
-### 3. `recommend_policy_funds` - 정책지원금 추천
-창업자 조건에 맞는 정부/지자체 정책지원금을 추천합니다.
+#### 5. `calculate_startup_cost` - 창업 비용 계산기 (신규)
+업종별, 지역별, 규모별 예상 창업 비용을 계산합니다.
 
 ```json
-{ "business_type": "카페", "stage": "예비창업", "region": "서울", "founder_type": "청년", "founder_age": 28 }
+{ "business_type": "카페", "region": "강남", "size": 15, "premium_level": "standard" }
 ```
 
-**결과:** 맞춤 지원금 목록, 신청 자격, 지원 금액, 신청 방법
+#### 6. `analyze_breakeven` - 손익분기점 분석 (신규)
+월 필요 매출, 일 필요 고객수, 투자 회수 기간, 수익 시나리오를 분석합니다.
 
-### 4. `get_startup_checklist` - 창업 체크리스트
-업종별 필요 인허가, 예상 비용, 준비 순서를 안내합니다.
+```json
+{ "business_type": "카페", "region": "강남", "monthly_rent": 300, "size": 15 }
+```
+
+### 📋 창업 준비 도구
+
+#### 7. `get_startup_checklist` - 창업 체크리스트
+업종별 필요 인허가, 예상 비용, 준비 순서를 안내합니다. 실시간 상권 경쟁 데이터 포함.
 
 ```json
 { "business_type": "음식점", "region": "서울" }
 ```
 
-**결과:** 인허가 목록, 예상 비용, 단계별 체크리스트
-
-### 5. `get_business_trends` - 창업 트렌드
-최근 창업 트렌드와 업종별 성장/쇠퇴 현황을 분석합니다.
+#### 8. `recommend_policy_funds` - 정책지원금 추천
+창업자 조건에 맞는 정부/지자체 정책지원금을 추천합니다. 기업마당 API 연동.
 
 ```json
-{ "region": "전국", "category": "카페" }
+{ "business_type": "카페", "stage": "예비창업", "region": "서울", "founder_type": "청년" }
 ```
 
-**결과:** 성장 업종, 하락 업종, 트렌드 인사이트
+#### 9. `get_business_trends` - 창업 트렌드
+최근 창업 트렌드와 업종별 성장/쇠퇴 현황을 분석합니다. SEMAS 실시간 데이터.
+
+```json
+{ "region": "전국", "category": "카페", "period": "6months" }
+```
 
 ---
 
@@ -194,9 +220,11 @@ pnpm dev:http   # HTTP/SSE 모드
 
 | API | 용도 | 데이터 |
 |-----|------|--------|
-| **카카오맵 로컬 API** | 장소 검색, 좌표 변환 | 실시간 |
-| 소상공인시장진흥공단 API | 상권 통계 | 준실시간 |
-| 기업마당 API | 정책지원금 | 준실시간 |
+| **카카오맵 로컬 API** | 장소 검색, 좌표 변환, 경쟁업체 검색 | 실시간 |
+| **소상공인마당 SEMAS API** | 상권정보, 업종별 점포 수, 경쟁 분석 | 실시간 |
+| 기업마당 API | 정책지원금 검색 | 준실시간 |
+
+> 📌 API 캐싱 시스템 적용: 동일 요청 5분간 캐시하여 응답 속도 향상
 
 ---
 
@@ -208,14 +236,26 @@ src/
 ├── constants.ts             # 상수 정의
 ├── types.ts                 # TypeScript 타입
 ├── api/
-│   └── kakao-api.ts         # 카카오맵 API 클라이언트
+│   ├── kakao-api.ts         # 카카오맵 API (캐싱 적용)
+│   ├── semas-api.ts         # 소상공인마당 SEMAS API
+│   └── bizinfo-api.ts       # 기업마당 API
+├── data/
+│   ├── startup-cost-data.ts # 창업 비용 데이터
+│   ├── breakeven-data.ts    # 손익분기점 벤치마크
+│   └── population-data.ts   # 상권 인구 데이터
 ├── tools/
 │   ├── commercial-area.ts   # 상권 분석
-│   ├── competitors.ts       # 경쟁업체 검색
+│   ├── competitors.ts       # 경쟁업체 검색 (SEMAS 연동)
 │   ├── policy-funds.ts      # 정책지원금 추천
 │   ├── startup-checklist.ts # 창업 체크리스트
-│   └── business-trends.ts   # 창업 트렌드
-└── tests/                   # 테스트 코드
+│   ├── business-trends.ts   # 창업 트렌드
+│   ├── startup-cost.ts      # 창업 비용 계산기
+│   ├── breakeven.ts         # 손익분기점 분석
+│   └── population.ts        # 상권 인구 분석
+├── utils/
+│   ├── response-formatter.ts # 응답 포맷터
+│   └── cache.ts             # API 캐시 시스템
+└── tests/                   # 테스트 코드 (72개)
 ```
 
 ---
@@ -226,7 +266,7 @@ src/
 |------|------|
 | TypeScript | ✅ 타입 안전 |
 | ESLint | ✅ 코드 품질 |
-| Vitest | ✅ 10개 테스트 통과 |
+| Vitest | ✅ 72개 테스트 통과 |
 | Rate Limiting | ✅ 100 req/min |
 | Error Handling | ✅ 한글 에러 메시지 |
 | Graceful Shutdown | ✅ SIGTERM/SIGINT |
@@ -236,10 +276,11 @@ src/
 ## 🏆 차별화 포인트
 
 1. **원스톱 솔루션** - 4개 사이트 정보를 한 번의 대화로
-2. **카카오 API 중심** - 카카오맵 로컬 API 핵심 활용
-3. **맥락 기반 분석** - 단순 데이터가 아닌 인사이트 제공
-4. **맞춤 추천** - 창업자 조건별 필터링
-5. **한글 UX** - 모든 메시지 한글화
+2. **카카오 + SEMAS 연동** - 카카오맵 + 소상공인마당 실시간 데이터
+3. **수익성 분석** - 손익분기점, 투자회수기간 계산
+4. **맞춤 추천** - 창업자 조건별 지원금/상권 추천
+5. **API 캐싱** - 빠른 응답 + 비용 절감
+6. **한글 UX** - 모든 메시지 한글화
 
 ---
 
