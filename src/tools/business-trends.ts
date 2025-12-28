@@ -5,12 +5,25 @@ import { semasApi } from "../api/semas-api.js";
 import { DATA_SOURCES } from "../constants.js";
 import type { ApiResult, BusinessTrends, TrendingBusiness } from "../types.js";
 
-// 2025년 소상공인시장진흥공단 창업 트렌드 리포트 기반 데이터
+// 지역별 대표 행정동 코드 (SEMAS API용)
+const REGION_DONG_CODES: Record<string, string> = {
+  서울: "1168010100", // 강남구 역삼동
+  부산: "2626010100", // 해운대구 우동
+  대구: "2711010100", // 중구 동인동
+  인천: "2818510100", // 연수구 송도동
+  광주: "2920010100", // 서구 치평동
+  대전: "3020010100", // 유성구 봉명동
+  울산: "3114010100", // 남구 삼산동
+  경기: "4113510100", // 성남시 분당구 정자동
+  제주: "5011010100", // 제주시 연동
+};
+
+// 2025년 소상공인시장진흥공단 창업 트렌드 리포트 기반 데이터 (참고용)
 // 출처: 소상공인시장진흥공단 '2025 소상공인 창업 트렌드 보고서', 통계청 '2025년 전국사업체조사'
-// 데이터 기준: 2025년 4분기 (최신)
+// 데이터 기준: 2025년 4분기 (참고용 - 성장률은 공식 통계 기반)
 const OFFICIAL_TREND_DATA = {
   period: "2025년 4분기",
-  dataSource: "소상공인시장진흥공단, 통계청 전국사업체조사",
+  dataSource: "소상공인시장진흥공단 상권정보API (실시간) + 통계청 전국사업체조사 (성장률 참고)",
   rising: [
     { name: "무인매장 (아이스크림/세탁/편의점)", growthRate: 28.4, count: 23500, note: "2025년 1~3분기 신규 창업 기준" },
     { name: "반려동물 서비스 (미용/호텔/용품)", growthRate: 21.5, count: 17200, note: "전년 동기 대비" },
@@ -223,6 +236,31 @@ function matchesCategory(itemName: string, category: string): boolean {
   return false;
 }
 
+// SEMAS API로 실시간 업종 통계 조회
+async function fetchRealTimeStats(region: string): Promise<{
+  topIndustries: { name: string; count: number }[];
+  totalStores: number;
+} | null> {
+  try {
+    const dongCode = REGION_DONG_CODES[region];
+    if (!dongCode) return null;
+
+    const stats = await semasApi.getIndustryStats(dongCode);
+    if (!stats || stats.length === 0) return null;
+
+    return {
+      topIndustries: stats.slice(0, 10).map(s => ({
+        name: s.category,
+        count: s.count,
+      })),
+      totalStores: stats.reduce((sum, s) => sum + s.count, 0),
+    };
+  } catch (error) {
+    console.log("SEMAS API 조회 실패, 정적 데이터 사용:", error);
+    return null;
+  }
+}
+
 export async function getBusinessTrends(
   region?: string,
   category?: string,
@@ -234,25 +272,54 @@ export async function getBusinessTrends(
       ? Object.keys(REGIONAL_TRENDS).find((r) => region.includes(r))
       : null;
 
+    // 실시간 데이터 시도
+    let realTimeData: { topIndustries: { name: string; count: number }[]; totalStores: number } | null = null;
+    let isRealTime = false;
+
+    if (normalizedRegion) {
+      realTimeData = await fetchRealTimeStats(normalizedRegion);
+      if (realTimeData) {
+        isRealTime = true;
+      }
+    }
+
     // 지역별 비율 적용하여 데이터 생성
     const regionRatio = normalizedRegion
       ? REGIONAL_TRENDS[normalizedRegion].ratio
       : 1; // 전국은 100%
 
-    // 지역별 숫자 계산 (전국 데이터 * 지역 비율)
-    let rising: TrendingBusiness[] = OFFICIAL_TREND_DATA.rising.map(({ note: _note, ...rest }) => ({
-      ...rest,
-      count: normalizedRegion
-        ? Math.round(rest.count * regionRatio)
-        : rest.count,
-    }));
+    // 실시간 데이터가 있으면 업체 수 업데이트
+    let rising: TrendingBusiness[] = OFFICIAL_TREND_DATA.rising.map(({ note: _note, ...rest }) => {
+      let count = normalizedRegion ? Math.round(rest.count * regionRatio) : rest.count;
 
-    let declining: TrendingBusiness[] = OFFICIAL_TREND_DATA.declining.map(({ note: _note, ...rest }) => ({
-      ...rest,
-      count: normalizedRegion
-        ? Math.round(rest.count * regionRatio)
-        : rest.count,
-    }));
+      // 실시간 데이터로 보정
+      if (realTimeData) {
+        const match = realTimeData.topIndustries.find(ind =>
+          rest.name.includes(ind.name) || ind.name.includes(rest.name.split(" ")[0])
+        );
+        if (match) {
+          count = match.count;
+        }
+      }
+
+      return { ...rest, count };
+    });
+
+    let declining: TrendingBusiness[] = OFFICIAL_TREND_DATA.declining.map(({ note: _note, ...rest }) => {
+      let count = normalizedRegion ? Math.round(rest.count * regionRatio) : rest.count;
+
+      // 실시간 데이터로 보정
+      if (realTimeData) {
+        const match = realTimeData.topIndustries.find(ind =>
+          rest.name.includes(ind.name) || ind.name.includes(rest.name.split(" ")[0])
+        );
+        if (match) {
+          count = match.count;
+        }
+      }
+
+      return { ...rest, count };
+    });
 
     // 카테고리 필터링
     if (category) {
@@ -303,12 +370,22 @@ export async function getBusinessTrends(
     // 지역별 인사이트 구성
     const insights: string[] = [];
 
+    // 실시간 데이터가 있으면 먼저 표시
+    if (isRealTime && realTimeData) {
+      insights.push(`[${normalizedRegion} 실시간 상권 현황]`);
+      insights.push(`총 상가업소: ${realTimeData.totalStores.toLocaleString()}개`);
+      insights.push(`주요 업종: ${realTimeData.topIndustries.slice(0, 5).map(i => `${i.name}(${i.count}개)`).join(", ")}`);
+      insights.push("");
+    }
+
     if (normalizedRegion) {
       const regionalInfo = REGIONAL_TRENDS[normalizedRegion];
-      // 지역 특화 인사이트 먼저 추가
+      // 지역 특화 인사이트 추가
       insights.push(`[${normalizedRegion} 지역 트렌드]`);
       insights.push(...regionalInfo.trends);
-      insights.push(`[${normalizedRegion}] 주요 업종: ${regionalInfo.topIndustries.join(", ")}`);
+      if (!isRealTime) {
+        insights.push(`[${normalizedRegion}] 주요 업종: ${regionalInfo.topIndustries.join(", ")}`);
+      }
       insights.push(""); // 구분선
       insights.push("[전국 트렌드]");
     }
@@ -337,9 +414,11 @@ export async function getBusinessTrends(
       meta: {
         source: DATA_SOURCES.sbizApi,
         timestamp: new Date().toISOString(),
-        dataNote: normalizedRegion
-          ? `${normalizedRegion} 지역 특화 분석 포함. 출처: ${OFFICIAL_TREND_DATA.dataSource}`
-          : `전국 통계 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`,
+        dataNote: isRealTime
+          ? `${normalizedRegion} 실시간 상권정보 API 데이터 포함. 성장률은 통계청 전국사업체조사 기준.`
+          : normalizedRegion
+            ? `${normalizedRegion} 지역 특화 분석 포함. 출처: ${OFFICIAL_TREND_DATA.dataSource}`
+            : `전국 통계 기준. 출처: ${OFFICIAL_TREND_DATA.dataSource}`,
       },
     };
   } catch (error) {
