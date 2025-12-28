@@ -256,8 +256,48 @@ export async function getBusinessTrends(
 
     // 카테고리 필터링
     if (category) {
-      rising = rising.filter(item => matchesCategory(item.name, category));
-      declining = declining.filter(item => matchesCategory(item.name, category));
+      const filteredRising = rising.filter(item => matchesCategory(item.name, category));
+      const filteredDeclining = declining.filter(item => matchesCategory(item.name, category));
+
+      // 성장 업종이 있으면 적용
+      if (filteredRising.length > 0) {
+        rising = filteredRising;
+      }
+
+      // 하락 업종이 없으면 관련 경쟁/대체 업종 표시
+      if (filteredDeclining.length > 0) {
+        declining = filteredDeclining;
+      } else {
+        // 카테고리별 대체/경쟁 관계 정의
+        const relatedDeclining: Record<string, string[]> = {
+          무인: ["일반 편의점", "유인 매장"],
+          카페: ["일반 커피전문점"],
+          반려동물: [],
+          건강: [],
+          스터디: ["PC방/게임장"],
+          충전: [],
+        };
+
+        // 관련 하락 업종 찾기
+        for (const [key, related] of Object.entries(relatedDeclining)) {
+          if (category.toLowerCase().includes(key.toLowerCase())) {
+            declining = declining.filter(item =>
+              related.some(r => item.name.includes(r)) ||
+              item.name.includes("전통") ||
+              item.name.includes("일반")
+            );
+            break;
+          }
+        }
+
+        // 여전히 없으면 전체 하락 업종 중 상위 2개 표시
+        if (declining.length === 0) {
+          declining = OFFICIAL_TREND_DATA.declining.slice(0, 2).map(({ note: _note, ...rest }) => ({
+            ...rest,
+            count: normalizedRegion ? Math.round(rest.count * regionRatio) : rest.count,
+          }));
+        }
+      }
     }
 
     // 지역별 인사이트 구성

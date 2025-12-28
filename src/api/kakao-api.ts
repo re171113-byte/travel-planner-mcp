@@ -168,26 +168,29 @@ class KakaoLocalApi {
     // 업종 키워드 정규화 (치킨 -> 치킨집 등)
     const normalizedType = this.normalizeBusinessType(businessType);
 
-    // 방법 1: 위치 + 업종으로 직접 검색 (좌표 없이)
-    let places = await this.searchByKeyword(`${location} ${normalizedType}`, {
-      size: limit,
-    });
+    // 먼저 위치 좌표 얻기 (거리 계산용)
+    const coords = await this.getCoordinates(location);
 
-    // 방법 2: 결과가 없으면 좌표 기반 검색 시도
-    if (places.length === 0) {
-      const coords = await this.getCoordinates(location);
-      if (coords) {
-        places = await this.searchByKeyword(normalizedType, {
-          x: String(coords.lng),
-          y: String(coords.lat),
-          radius,
-          size: limit,
-          sort: "distance",
-        });
-      }
+    // 좌표 기반 검색 (거리 정보 포함)
+    let places: KakaoPlace[] = [];
+    if (coords) {
+      places = await this.searchByKeyword(`${normalizedType}`, {
+        x: String(coords.lng),
+        y: String(coords.lat),
+        radius,
+        size: limit,
+        sort: "distance",
+      });
     }
 
-    // 방법 3: 여전히 없으면 원본 키워드로 재시도
+    // 결과 없으면 위치+업종 키워드로 검색
+    if (places.length === 0) {
+      places = await this.searchByKeyword(`${location} ${normalizedType}`, {
+        size: limit,
+      });
+    }
+
+    // 여전히 없으면 원본 키워드로 재시도
     if (places.length === 0 && normalizedType !== businessType) {
       places = await this.searchByKeyword(`${location} ${businessType}`, {
         size: limit,
@@ -199,10 +202,29 @@ class KakaoLocalApi {
       name: place.place_name,
       category: place.category_name,
       address: place.road_address_name || place.address_name,
-      distance: place.distance ? parseInt(place.distance, 10) : 0,
+      distance: place.distance ? parseInt(place.distance, 10) : this.calculateDistance(coords, place),
       phone: place.phone || undefined,
       placeUrl: place.place_url,
     }));
+  }
+
+  // 거리 계산 (좌표가 있을 경우)
+  private calculateDistance(from: Coordinates | null, place: KakaoPlace): number {
+    if (!from) return 0;
+    const lat1 = from.lat;
+    const lon1 = from.lng;
+    const lat2 = parseFloat(place.y);
+    const lon2 = parseFloat(place.x);
+
+    // Haversine formula
+    const R = 6371000; // meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c);
   }
 
   // 업종 키워드 정규화

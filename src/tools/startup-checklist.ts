@@ -595,18 +595,20 @@ function generateTips(businessType: string): string[] {
   return [...(specificTips[businessType] || []), ...commonTips];
 }
 
-// 업종 정규화
+// 업종 정규화 (구체적인 업종을 먼저 체크)
 function normalizeBusinessType(input: string): string {
   const inputLower = input.toLowerCase();
 
+  // 구체적인 업종을 먼저 체크 (스터디카페, 키즈카페 등)
+  if (inputLower.includes("스터디") || inputLower.includes("독서실") || inputLower.includes("공유오피스")) return "스터디카페";
+  if (inputLower.includes("키즈") || inputLower.includes("놀이")) return "키즈카페";
+  // 일반 카페는 나중에 체크
   if (inputLower.includes("카페") || inputLower.includes("커피")) return "카페";
   if (inputLower.includes("음식") || inputLower.includes("식당") || inputLower.includes("레스토랑")) return "음식점";
   if (inputLower.includes("무인") || inputLower.includes("셀프") || inputLower.includes("코인")) return "무인매장";
   if (inputLower.includes("반려") || inputLower.includes("펫") || inputLower.includes("애완")) return "반려동물";
-  if (inputLower.includes("스터디") || inputLower.includes("독서실") || inputLower.includes("공유오피스")) return "스터디카페";
   if (inputLower.includes("편의점") || inputLower.includes("마트")) return "편의점";
   if (inputLower.includes("미용") || inputLower.includes("헤어") || inputLower.includes("네일")) return "미용실";
-  if (inputLower.includes("키즈") || inputLower.includes("놀이")) return "키즈카페";
 
   return "default";
 }

@@ -136,8 +136,48 @@ export class BizinfoApi {
       return startupKeywords.some(kw => text.includes(kw));
     });
 
+    // 관련 없는 분야 제외
+    const excludeKeywords = ["수출", "해외진출", "글로벌", "전시회", "박람회", "번역", "콘텐츠수출", "무역", "산업용"];
+    results = results.filter(item => {
+      const text = `${item.pblancNm} ${item.pldirSportRealmLclasCodeNm}`;
+      // 제외 키워드가 제목이나 분류에 있으면 제외
+      return !excludeKeywords.some(kw => text.includes(kw));
+    });
+
+    // 관련성 점수 계산 및 정렬
+    const scored = results.map(item => {
+      let score = 0;
+      const text = `${item.pblancNm} ${item.bsnsSumryCn} ${item.hashtags} ${item.trgetNm}`;
+
+      // 창업 관련 점수
+      if (text.includes("창업")) score += 10;
+      if (text.includes("소상공인")) score += 8;
+      if (text.includes("자금")) score += 5;
+      if (text.includes("융자")) score += 5;
+      if (text.includes("보조금")) score += 5;
+
+      // 창업자 유형 매칭
+      if (options?.founderType) {
+        if (options.founderType === "청년" && text.includes("청년")) score += 15;
+        if (options.founderType === "여성" && text.includes("여성")) score += 15;
+        if (options.founderType === "중장년" && (text.includes("중장년") || text.includes("시니어") || text.includes("재도전"))) score += 15;
+      }
+
+      // 지역 매칭
+      if (options?.region) {
+        const regionKeywords = ["서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"];
+        const userRegion = regionKeywords.find(r => options.region?.includes(r));
+        if (userRegion && text.includes(userRegion)) score += 10;
+      }
+
+      return { item, score };
+    });
+
+    // 점수순 정렬
+    scored.sort((a, b) => b.score - a.score);
+
     // 클라이언트 측 필터링 (너무 엄격하지 않게)
-    let filtered = results;
+    let filtered = scored.map(s => s.item);
 
     // 지역 필터링 (해당 지역 또는 전국 사업) - 완화된 조건
     if (options?.region) {
