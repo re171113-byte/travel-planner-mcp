@@ -216,7 +216,7 @@ export async function estimateRent(
       meta: {
         source: "소상공인진흥공단, 국토부 상업용부동산 통계 기반 추정",
         timestamp: new Date().toISOString(),
-        dataNote: `${size}평, ${floor} 기준. 신뢰도: 중간 (통계 기반 추정치). ${DISCLAIMERS.STARTUP_COST}`,
+        dataNote: `${size}평, ${floor} 기준. 🟡 신뢰도: 중간 (통계 기반 추정치). ${DISCLAIMERS.RENT_ESTIMATE}`,
       },
     };
   } catch (error) {

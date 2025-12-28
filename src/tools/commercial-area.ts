@@ -1,9 +1,74 @@
 // 상권 분석 Tool
-// 카카오맵 API를 활용한 상권 분석
+// 카카오맵 API + SEMAS 상권정보 API를 활용한 상권 분석
 
 import { kakaoApi } from "../api/kakao-api.js";
-import { SATURATION_LEVELS, DATA_SOURCES } from "../constants.js";
-import type { ApiResult, CommercialAreaData } from "../types.js";
+import { semasApi } from "../api/semas-api.js";
+import { SATURATION_LEVELS, DATA_SOURCES, CATEGORY_CODES } from "../constants.js";
+import type { ApiResult, CommercialAreaData, Coordinates } from "../types.js";
+
+// SEMAS 업종 키워드 매핑
+const SEMAS_BUSINESS_KEYWORDS: Record<string, string[]> = {
+  카페: ["커피", "카페", "음료", "디저트"],
+  음식점: ["음식", "식당", "레스토랑", "한식", "중식", "일식", "양식"],
+  편의점: ["편의점", "마트", "슈퍼"],
+  미용실: ["미용", "헤어", "살롱", "뷰티"],
+  치킨: ["치킨", "닭", "후라이드"],
+  호프: ["호프", "맥주", "주점", "술집"],
+  분식: ["분식", "떡볶이", "라면", "김밥"],
+  베이커리: ["빵", "베이커리", "제과", "케이크"],
+};
+
+// SEMAS API로 실시간 업소 수 조회
+async function fetchSemasStoreCount(
+  coordinates: Coordinates,
+  businessType: string,
+  radius: number
+): Promise<{ count: number; isRealTime: boolean } | null> {
+  try {
+    const { stores, totalCount } = await semasApi.getStoresByRadius(
+      coordinates.lng,
+      coordinates.lat,
+      radius,
+      { numOfRows: 1000 }
+    );
+
+    if (!stores || stores.length === 0) return null;
+
+    // 업종 키워드로 필터링
+    const keywords = SEMAS_BUSINESS_KEYWORDS[businessType] || [businessType];
+    const filteredCount = stores.filter(store => {
+      const storeName = `${store.bizesNm || ""} ${store.indsMclsNm || ""} ${store.indsLclsNm || ""}`.toLowerCase();
+      return keywords.some(kw => storeName.includes(kw.toLowerCase()));
+    }).length;
+
+    return {
+      count: filteredCount > 0 ? filteredCount : totalCount,
+      isRealTime: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// 업종명을 카카오맵 카테고리 코드로 변환
+function getBusinessCategoryCode(businessType: string): string | null {
+  const typeMap: Record<string, keyof typeof CATEGORY_CODES> = {
+    카페: "카페",
+    커피: "카페",
+    커피숍: "카페",
+    음식점: "음식점",
+    식당: "음식점",
+    맛집: "음식점",
+    레스토랑: "음식점",
+    편의점: "편의점",
+    마트: "대형마트",
+    대형마트: "대형마트",
+    병원: "병원",
+    약국: "약국",
+  };
+  const mapped = typeMap[businessType];
+  return mapped ? CATEGORY_CODES[mapped] : null;
+}
 
 // 포화도 레벨 계산
 function getSaturationLevel(score: number): string {
@@ -266,14 +331,35 @@ export async function analyzeCommercialArea(
       radius
     );
 
-    // 3. 해당 업종 업체 검색
-    const competitors = await kakaoApi.findCompetitors(
-      businessType,
-      location,
-      radius,
-      15
-    );
-    const sameCategoryCount = competitors.length;
+    // 3. 해당 업종 업체 수 조회 (SEMAS 실시간 + 카카오 폴백)
+    let sameCategoryCount = 0;
+    let isRealTimeData = false;
+
+    // 3-1. SEMAS API로 실시간 데이터 조회 시도
+    const semasData = await fetchSemasStoreCount(coords, businessType, radius);
+    if (semasData) {
+      sameCategoryCount = semasData.count;
+      isRealTimeData = true;
+    } else {
+      // 3-2. SEMAS 실패 시 카카오 API 폴백
+      const categoryCode = getBusinessCategoryCode(businessType);
+      if (categoryCode) {
+        sameCategoryCount = await kakaoApi.getCategoryTotalCount(
+          categoryCode,
+          String(coords.lng),
+          String(coords.lat),
+          radius
+        );
+      } else {
+        const competitors = await kakaoApi.findCompetitors(
+          businessType,
+          location,
+          radius,
+          15
+        );
+        sameCategoryCount = competitors.length;
+      }
+    }
 
     // 4. 분석 결과 계산
     const totalStores = Object.values(categoryBreakdown).reduce((a, b) => a + b, 0);
@@ -302,9 +388,13 @@ export async function analyzeCommercialArea(
         recommendation,
       },
       meta: {
-        source: DATA_SOURCES.kakaoLocal,
+        source: isRealTimeData
+          ? `${DATA_SOURCES.kakaoLocal} + ${DATA_SOURCES.sbizApi}`
+          : DATA_SOURCES.kakaoLocal,
         timestamp: new Date().toISOString(),
-        dataNote: `반경 ${radius}m 기준. 신뢰도: 높음 (카카오맵 실시간 API). ${sameCategoryCount > 0 ? `동종 업체 ${sameCategoryCount}개 검색됨.` : ""} ※ 실제 상권 현황은 현장 확인을 권장합니다.`,
+        dataNote: isRealTimeData
+          ? `반경 ${radius}m 기준. 🟢 신뢰도: 높음 (SEMAS 실시간 API). 동종 업체 ${sameCategoryCount}개 감지. ※ 실제 상권 현황은 현장 확인을 권장합니다.`
+          : `반경 ${radius}m 기준. 신뢰도: 높음 (카카오맵 API). ${sameCategoryCount > 0 ? `동종 업체 ${sameCategoryCount}개 검색됨.` : ""} ※ 실제 상권 현황은 현장 확인을 권장합니다.`,
       },
     };
   } catch (error) {

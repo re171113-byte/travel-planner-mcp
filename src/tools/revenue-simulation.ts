@@ -258,7 +258,7 @@ export async function simulateRevenue(
       meta: {
         source: "소상공인마당, 통계청, 업종별 평균 데이터 기반 추정",
         timestamp: new Date().toISOString(),
-        dataNote: `${size}평, ${staffCount}인 운영, ${operatingHours}시간 기준. 신뢰도: 중간 (통계 기반 추정치). ${DISCLAIMERS.BREAKEVEN}`,
+        dataNote: `${size}평, ${staffCount}인 운영, ${operatingHours}시간 기준. 🟡 신뢰도: 중간 (통계 기반 추정치). ${DISCLAIMERS.REVENUE_ESTIMATE}`,
       },
     };
   } catch (error) {
