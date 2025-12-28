@@ -2,6 +2,7 @@
 // API 문서: https://www.data.go.kr/data/15012005/openapi.do
 
 import { fetchWithTimeout } from "../utils/fetch-with-timeout.js";
+import { apiCache, CACHE_TTL, CACHE_KEYS } from "../utils/cache.js";
 
 const SEMAS_API_KEY = process.env.SEMAS_API_KEY || "";
 const SEMAS_API_BASE = "https://apis.data.go.kr/B553077/api/open/sdsc2";
@@ -153,7 +154,7 @@ export class SemasApi {
     };
   }
 
-  // 반경 내 상가업소 조회
+  // 반경 내 상가업소 조회 (캐시 적용)
   async getStoresByRadius(
     lon: number,
     lat: number,
@@ -165,6 +166,22 @@ export class SemasApi {
     }
   ): Promise<{ stores: StoreInfo[]; totalCount: number }> {
     this.checkApiKey();
+
+    // 캐시 확인 (좌표를 소수점 3자리로 반올림하여 유사 위치 캐시 활용)
+    const roundedLon = Math.round(lon * 1000) / 1000;
+    const roundedLat = Math.round(lat * 1000) / 1000;
+    const cacheKey = apiCache.generateKey(CACHE_KEYS.SEMAS_STORES, {
+      lon: roundedLon,
+      lat: roundedLat,
+      radius,
+      industryCd: options?.industryCd,
+      numOfRows: options?.numOfRows || 1000,
+    });
+
+    const cached = apiCache.get<{ stores: StoreInfo[]; totalCount: number }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const params = new URLSearchParams({
       ServiceKey: this.apiKey,
@@ -202,10 +219,15 @@ export class SemasApi {
       throw new Error(`상권정보 API 오류: ${data.header.resultMsg}`);
     }
 
-    return {
+    const result = {
       stores: data.body.items || [],
       totalCount: data.body.totalCount || 0,
     };
+
+    // 상권 데이터는 5분간 캐시 (매장 정보는 자주 변하지 않음)
+    apiCache.set(cacheKey, result, CACHE_TTL.MEDIUM);
+
+    return result;
   }
 
   // 업종별 상가 수 집계 (특정 지역)

@@ -70,15 +70,43 @@ export function formatCompetitors(result: ApiResult<CompetitorAnalysis>): string
     `   • 총 경쟁업체: ${d.analysis.totalCount}개`,
     `   • 프랜차이즈 비율: ${d.analysis.franchiseRatio}%`,
     `   • 시장 진입 여지: ${d.analysis.marketGap}`,
-    ``,
-    `🏆 주변 경쟁업체 TOP ${d.competitors.length}`,
   ];
+
+  // 세부 업종 분포 (SEMAS 데이터)
+  if (d.analysis.topCategories && d.analysis.topCategories.length > 0) {
+    lines.push(``);
+    lines.push(`📈 세부 업종 분포`);
+    d.analysis.topCategories.forEach((cat) => {
+      lines.push(`   • ${cat.name}: ${cat.count}개`);
+    });
+  }
+
+  lines.push(``);
+  lines.push(`🏆 주변 경쟁업체 TOP ${d.competitors.length}`);
 
   d.competitors.forEach((c, i) => {
     lines.push(`   ${i + 1}. ${c.name}`);
-    lines.push(`      📍 ${c.address} (${c.distance}m)`);
+    const distanceInfo = c.distance > 0 ? ` (${c.distance}m)` : "";
+    lines.push(`      📍 ${c.address}${distanceInfo}`);
     if (c.phone) lines.push(`      📞 ${c.phone}`);
   });
+
+  // 인사이트 표시
+  if (d.analysis.insights && d.analysis.insights.length > 0) {
+    lines.push(``);
+    lines.push(`💡 인사이트`);
+    d.analysis.insights.forEach((insight) => {
+      lines.push(`   • ${insight}`);
+    });
+  }
+
+  if (result.meta) {
+    lines.push(``);
+    lines.push(`📅 데이터 출처: ${result.meta.source}`);
+    if (result.meta.dataNote) {
+      lines.push(`📌 ${result.meta.dataNote}`);
+    }
+  }
 
   return lines.join("\n");
 }

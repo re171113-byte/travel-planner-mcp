@@ -2,6 +2,7 @@
 // API 문서: https://developers.kakao.com/docs/latest/ko/local/dev-guide
 
 import { fetchWithTimeout } from "../utils/fetch-with-timeout.js";
+import { apiCache, CACHE_TTL, CACHE_KEYS } from "../utils/cache.js";
 import type {
   KakaoPlaceResponse,
   KakaoPlace,
@@ -35,10 +36,17 @@ class KakaoLocalApi {
     }
   }
 
-  // 주소/장소명으로 좌표 검색
+  // 주소/장소명으로 좌표 검색 (캐시 적용)
   async getCoordinates(query: string): Promise<Coordinates | null> {
     this.checkApiKey();
     const normalizedQuery = normalizeQuery(query);
+
+    // 캐시 확인
+    const cacheKey = apiCache.generateKey(CACHE_KEYS.COORDINATES, { query: normalizedQuery });
+    const cached = apiCache.get<Coordinates | null>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
 
     // 먼저 주소 검색 시도
     const addressUrl = `${KAKAO_API_BASE}/search/address.json?query=${encodeURIComponent(normalizedQuery)}`;
@@ -52,10 +60,13 @@ class KakaoLocalApi {
         const data = (await response.json()) as KakaoAddressResponse;
         if (data.documents.length > 0) {
           const doc = data.documents[0];
-          return {
+          const result = {
             lat: parseFloat(doc.y),
             lng: parseFloat(doc.x),
           };
+          // 좌표는 잘 변하지 않으므로 오래 캐시
+          apiCache.set(cacheKey, result, CACHE_TTL.VERY_LONG);
+          return result;
         }
       }
     } catch {
@@ -75,14 +86,18 @@ class KakaoLocalApi {
 
     const data = (await response.json()) as KakaoPlaceResponse;
     if (data.documents.length === 0) {
+      // null도 캐시 (없는 지역 반복 조회 방지)
+      apiCache.set(cacheKey, null, CACHE_TTL.MEDIUM);
       return null;
     }
 
     const doc = data.documents[0];
-    return {
+    const result = {
       lat: parseFloat(doc.y),
       lng: parseFloat(doc.x),
     };
+    apiCache.set(cacheKey, result, CACHE_TTL.VERY_LONG);
+    return result;
   }
 
   // 키워드로 장소 검색

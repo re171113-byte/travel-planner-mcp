@@ -2,8 +2,10 @@
 // 업종별 인허가 및 창업 준비사항 안내
 // 출처: 소상공인마당(sbiz.or.kr), 정부24 인허가 포털, 각 지자체 창업 가이드
 
+import { kakaoApi } from "../api/kakao-api.js";
+import { semasApi } from "../api/semas-api.js";
 import { DATA_SOURCES } from "../constants.js";
-import type { ApiResult, StartupChecklist, License } from "../types.js";
+import type { ApiResult, StartupChecklist, License, Coordinates } from "../types.js";
 
 // 업종별 필요 인허가 데이터베이스
 // 출처: 정부24 인허가 자가진단(https://www.gov.kr/portal/license)
@@ -613,6 +615,102 @@ function normalizeBusinessType(input: string): string {
   return "default";
 }
 
+// 지역별 대표 좌표 (SEMAS API용)
+const REGION_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  서울: { lat: 37.4979, lng: 127.0276 },
+  강남: { lat: 37.4979, lng: 127.0276 },
+  홍대: { lat: 37.5563, lng: 126.9240 },
+  부산: { lat: 35.1796, lng: 129.0756 },
+  대구: { lat: 35.8714, lng: 128.6014 },
+  인천: { lat: 37.4563, lng: 126.7052 },
+  광주: { lat: 35.1595, lng: 126.8526 },
+  대전: { lat: 36.3504, lng: 127.3845 },
+  경기: { lat: 37.4138, lng: 127.5183 },
+  제주: { lat: 33.4996, lng: 126.5312 },
+};
+
+// 업종별 검색 키워드
+const BUSINESS_KEYWORDS: Record<string, string[]> = {
+  카페: ["커피", "카페", "음료"],
+  음식점: ["음식", "식당", "레스토랑"],
+  편의점: ["편의점", "마트"],
+  미용실: ["미용", "헤어", "뷰티"],
+  무인매장: ["무인", "셀프"],
+  반려동물: ["반려", "펫", "애견"],
+  스터디카페: ["스터디", "독서실"],
+  키즈카페: ["키즈", "놀이"],
+};
+
+// SEMAS API로 실시간 경쟁 현황 조회
+async function fetchMarketCompetition(
+  coordinates: Coordinates,
+  businessType: string
+): Promise<{
+  competitorCount: number;
+  topCategories: { name: string; count: number }[];
+  competitionLevel: "낮음" | "보통" | "높음" | "매우높음";
+  insights: string[];
+} | null> {
+  try {
+    const { stores, totalCount } = await semasApi.getStoresByRadius(
+      coordinates.lng,
+      coordinates.lat,
+      500, // 반경 500m
+      { numOfRows: 500 }
+    );
+
+    if (!stores || stores.length === 0) return null;
+
+    // 업종 키워드로 필터링
+    const keywords = BUSINESS_KEYWORDS[businessType] || [businessType];
+    const competitors = stores.filter(store => {
+      const storeName = `${store.bizesNm || ""} ${store.indsMclsNm || ""} ${store.indsLclsNm || ""}`.toLowerCase();
+      return keywords.some(kw => storeName.includes(kw.toLowerCase()));
+    });
+
+    // 업종별 집계
+    const categoryMap = new Map<string, number>();
+    for (const store of competitors) {
+      const category = store.indsMclsNm || store.indsLclsNm || "기타";
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+    }
+
+    const topCategories = Array.from(categoryMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+
+    // 경쟁 수준 판단
+    const competitorCount = competitors.length;
+    let competitionLevel: "낮음" | "보통" | "높음" | "매우높음";
+    if (competitorCount <= 5) competitionLevel = "낮음";
+    else if (competitorCount <= 15) competitionLevel = "보통";
+    else if (competitorCount <= 30) competitionLevel = "높음";
+    else competitionLevel = "매우높음";
+
+    // 인사이트 생성
+    const insights: string[] = [];
+    insights.push(`[실시간 상권 분석] 반경 500m 내 동종업계 ${competitorCount}개 (경쟁: ${competitionLevel})`);
+    insights.push(`전체 상가업소: ${totalCount}개`);
+
+    if (competitionLevel === "낮음") {
+      insights.push("경쟁업체가 적어 진입하기 좋은 환경입니다.");
+    } else if (competitionLevel === "매우높음") {
+      insights.push("경쟁이 매우 치열합니다. 강력한 차별화 전략이 필요합니다.");
+    }
+
+    return {
+      competitorCount,
+      topCategories,
+      competitionLevel,
+      insights,
+    };
+  } catch (error) {
+    console.log("SEMAS 상권 분석 실패:", error);
+    return null;
+  }
+}
+
 // 지역별 비용 배율 및 특화 팁
 const REGIONAL_INFO: Record<string, { costMultiplier: number; tips: string[] }> = {
   서울: {
@@ -716,6 +814,48 @@ export async function getStartupChecklist(
       tips = [...REGIONAL_INFO[normalizedRegion].tips, ...tips];
     }
 
+    // SEMAS API로 실시간 상권 분석 (지역이 있는 경우)
+    let marketData: Awaited<ReturnType<typeof fetchMarketCompetition>> = null;
+    let isRealTime = false;
+
+    if (region) {
+      // 좌표 조회 시도
+      let coordinates: Coordinates | null = null;
+
+      // 미리 정의된 지역 좌표 확인
+      const regionKey = Object.keys(REGION_COORDINATES).find(r => region.includes(r));
+      if (regionKey) {
+        coordinates = REGION_COORDINATES[regionKey];
+      } else {
+        // Kakao API로 좌표 조회
+        try {
+          coordinates = await kakaoApi.getCoordinates(region);
+        } catch (error) {
+          console.log("좌표 조회 실패:", error);
+        }
+      }
+
+      if (coordinates) {
+        marketData = await fetchMarketCompetition(coordinates, normalizedType);
+        if (marketData) {
+          isRealTime = true;
+          // 실시간 인사이트를 팁 앞에 추가
+          tips = [...marketData.insights, "", ...tips];
+        }
+      }
+    }
+
+    // 데이터 소스 결정
+    const dataSource = isRealTime
+      ? `${DATA_SOURCES.sbizApi} + 소상공인마당 상권정보 API (실시간)`
+      : DATA_SOURCES.sbizApi;
+
+    const dataNote = isRealTime && marketData
+      ? `${region} 지역 실시간 분석. 반경 500m 내 동종업계 ${marketData.competitorCount}개. 경쟁수준: ${marketData.competitionLevel}`
+      : normalizedRegion
+        ? `${normalizedRegion} 지역 기준 비용 산정. 출처: 소상공인마당, 정부24.`
+        : "전국 평균 기준. 지역별로 상이할 수 있으니 관할 관청에 확인 권장.";
+
     return {
       success: true,
       data: {
@@ -726,11 +866,9 @@ export async function getStartupChecklist(
         tips,
       },
       meta: {
-        source: DATA_SOURCES.sbizApi,
+        source: dataSource,
         timestamp: new Date().toISOString(),
-        dataNote: normalizedRegion
-          ? `${normalizedRegion} 지역 기준 비용 산정. 출처: 소상공인마당, 정부24.`
-          : "전국 평균 기준. 지역별로 상이할 수 있으니 관할 관청에 확인 권장.",
+        dataNote,
       },
     };
   } catch (error) {

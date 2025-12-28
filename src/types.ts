@@ -47,7 +47,7 @@ export interface CommercialAreaData {
 
 // 경쟁업체 정보
 export interface Competitor {
-  id: string;
+  id?: string;
   name: string;
   category: string;
   address: string;
@@ -66,6 +66,8 @@ export interface CompetitorAnalysis {
     totalCount: number;
     franchiseRatio: number;
     marketGap: string;
+    topCategories?: { name: string; count: number }[];
+    insights?: string[];
   };
 }
 
