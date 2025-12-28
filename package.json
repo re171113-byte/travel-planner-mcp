@@ -1,7 +1,7 @@
 {
   "name": "startup-helper-mcp",
-  "version": "1.0.0",
-  "description": "AI 창업 컨설턴트 MCP - 상권분석부터 정책지원금까지 창업의 모든 것",
+  "version": "1.1.0",
+  "description": "AI 창업 컨설턴트 MCP - 상권분석, 지역비교, 경쟁업체, 정책지원금, 트렌드까지 6가지 도구 제공",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

@@ -2,8 +2,8 @@
 
 export const APP_CONFIG = {
   name: "startup-helper",
-  version: "1.0.0",
-  description: "AI 창업 컨설턴트 - 상권분석부터 정책지원금까지",
+  version: "1.1.0",
+  description: "AI 창업 컨설턴트 - 상권분석, 지역비교, 경쟁업체, 정책지원금, 트렌드까지 6가지 도구 제공",
 } as const;
 
 export const SERVER_CONFIG = {
