@@ -592,11 +592,89 @@ export function calculateFitScore(
   };
 }
 
-// 상권명 정규화 (부분 일치 허용)
+// 위치명 별칭 매핑 (다양한 표현 → 표준 상권명)
+export const LOCATION_ALIASES: Record<string, string> = {
+  // 홍대 계열
+  홍대: "홍대입구",
+  홍대역: "홍대입구",
+  홍익대: "홍대입구",
+  홍익대학교: "홍대입구",
+  상수: "홍대입구",
+  상수역: "홍대입구",
+  합정: "홍대입구",
+
+  // 강남 계열
+  강남: "강남역",
+  "강남구 역삼동": "강남역",
+  역삼: "강남역",
+  역삼역: "강남역",
+
+  // 건대 계열
+  건대: "건대입구",
+  건대역: "건대입구",
+  건국대: "건대입구",
+  건국대학교: "건대입구",
+
+  // 신촌 계열
+  신촌역: "신촌",
+  연세대: "신촌",
+  연세대학교: "신촌",
+  이대: "신촌",
+  이화여대: "신촌",
+
+  // 잠실 계열
+  잠실역: "잠실",
+  잠실새내: "잠실",
+  송파: "잠실",
+  롯데월드: "잠실",
+
+  // 명동 계열
+  명동역: "명동",
+  을지로: "명동",
+  충무로: "명동",
+
+  // 이태원 계열
+  이태원역: "이태원",
+  경리단길: "이태원",
+  해방촌: "이태원",
+
+  // 여의도 계열
+  여의도역: "여의도",
+  여의나루: "여의도",
+  국회의사당: "여의도",
+
+  // 서울역 계열
+  서울역광장: "서울역",
+  남대문: "서울역",
+  남대문시장: "서울역",
+
+  // 판교 계열
+  판교역: "판교",
+  판교테크노밸리: "판교",
+
+  // 해운대 계열
+  해운대역: "해운대",
+  해운대해수욕장: "해운대",
+  마린시티: "해운대",
+
+  // 서면 계열
+  서면역: "서면",
+  부산서면: "서면",
+};
+
+// 상권명 정규화 (별칭 + 부분 일치 허용)
 export function findAreaData(locationName: string): AreaPopulationData | null {
   const normalized = locationName.replace(/\s/g, "").toLowerCase();
 
-  // 정확한 매칭 시도
+  // 1. 별칭 매핑 확인
+  for (const [alias, standardName] of Object.entries(LOCATION_ALIASES)) {
+    if (normalized.includes(alias.replace(/\s/g, "").toLowerCase())) {
+      const data = MAJOR_AREA_DATA[standardName];
+      if (data) return data;
+    }
+  }
+
+  // 2. 정확한 매칭 시도
   for (const [key, data] of Object.entries(MAJOR_AREA_DATA)) {
     if (normalized.includes(key.replace(/\s/g, "").toLowerCase())) {
       return data;

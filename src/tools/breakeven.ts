@@ -5,6 +5,7 @@
 import { kakaoApi } from "../api/kakao-api.js";
 import { semasApi } from "../api/semas-api.js";
 import type { ApiResult, BreakevenAnalysis, Coordinates } from "../types.js";
+import { DISCLAIMERS } from "../constants.js";
 import {
   BUSINESS_BENCHMARKS,
   RENT_MULTIPLIER,
@@ -318,8 +319,8 @@ export async function analyzeBreakeven(
           : "소상공인진흥공단 업종별 원가 분석 기반 추정",
         timestamp: new Date().toISOString(),
         dataNote: competitorData
-          ? `${size}평 기준. 반경 500m 내 경쟁업체 ${competitorData.competitorCount}개 반영. 신뢰도: ${confidenceLabels[dataConfidence]}`
-          : `${size}평 기준, 객단가 ${usedAveragePrice.toLocaleString()}원 기준. 신뢰도: ${confidenceLabels[dataConfidence]}. 실제 수익은 운영 능력, 입지, 경쟁 상황에 따라 달라집니다.`,
+          ? `${size}평 기준. 반경 500m 내 경쟁업체 ${competitorData.competitorCount}개 반영. 신뢰도: ${confidenceLabels[dataConfidence]}. ${DISCLAIMERS.BREAKEVEN}`
+          : `${size}평 기준, 객단가 ${usedAveragePrice.toLocaleString()}원 기준. 신뢰도: ${confidenceLabels[dataConfidence]}. ${DISCLAIMERS.BREAKEVEN}`,
       },
     };
   } catch (error) {

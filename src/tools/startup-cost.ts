@@ -10,6 +10,7 @@ import {
   normalizeBusinessType,
   normalizeRegion,
 } from "../data/startup-cost-data.js";
+import { DISCLAIMERS } from "../constants.js";
 
 export async function calculateStartupCost(
   businessType: string,
@@ -125,7 +126,7 @@ export async function calculateStartupCost(
       meta: {
         source: "소상공인진흥공단, 창업진흥원 통계 기반 추정",
         timestamp: new Date().toISOString(),
-        dataNote: `${size}평 기준, ${premiumLabels[premiumLevel]} 인테리어 수준. 실제 비용은 입지, 상태, 협상에 따라 달라질 수 있습니다.`,
+        dataNote: `${size}평 기준, ${premiumLabels[premiumLevel]} 인테리어 수준. ${DISCLAIMERS.STARTUP_COST}`,
       },
     };
   } catch (error) {

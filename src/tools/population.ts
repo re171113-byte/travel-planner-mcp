@@ -5,6 +5,7 @@
 import { kakaoApi } from "../api/kakao-api.js";
 import { semasApi } from "../api/semas-api.js";
 import type { ApiResult, PopulationAnalysis, Coordinates } from "../types.js";
+import { DISCLAIMERS } from "../constants.js";
 import {
   AREA_TYPE_PATTERNS,
   BUSINESS_TARGET_FIT,
@@ -243,8 +244,8 @@ export async function analyzePopulation(
         : "상권 유형 패턴 기반 추정";
 
     const dataNote = realTimeData
-      ? `반경 ${radius}m 내 ${realTimeData.storeCount}개 업소 기반 추정. 신뢰도: ${confidenceLabels[dataConfidence]}`
-      : `반경 ${radius}m 기준 추정치. 신뢰도: ${confidenceLabels[dataConfidence]}. 실제 유동인구는 요일, 계절, 이벤트에 따라 달라질 수 있습니다.`;
+      ? `반경 ${radius}m 내 ${realTimeData.storeCount}개 업소 기반 추정. 신뢰도: ${confidenceLabels[dataConfidence]}. ${DISCLAIMERS.POPULATION}`
+      : `반경 ${radius}m 기준 추정치. 신뢰도: ${confidenceLabels[dataConfidence]}. ${DISCLAIMERS.POPULATION}`;
 
     return {
       success: true,
